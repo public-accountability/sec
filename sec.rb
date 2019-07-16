@@ -2,14 +2,14 @@
 
 require 'httparty'
 require 'nokogiri'
+require 'optparse'
+require 'pry'
 
 LISTING_URL = 'http://www.sec.gov/cgi-bin/browse-edgar'
-BAUPOST = '0001061768'
 
 Company = Struct.new(:cik, :name, keyword_init: true)
-Filing = Struct.new(:date, :href, :form_name, :type, keyword_init: true)
+Filing = Struct.new(:date, :href, :form_name, :type, :text_href, keyword_init: true)
 EdgarFilings = Struct.new(:company, :filings, :doc, keyword_init: true)
-
 
 # String --> HTTP REQUEST --> String
 def get_listing_xml(cik)
@@ -53,4 +53,28 @@ def sec_filings(cik)
   parse_listing get_listing_xml(cik)
 end
 
-# baupost = parse_listings(File.read('./baupost.xml'))
+# The filings contain links to an SEC index page and not the filing document itself.
+# In order to get the text of document we must parse that html document,
+# and retive the link to the text file.
+def get_submission_text_file_href(filing)
+  Nokogiri::HTML(HTTParty.get(filing.href).body)
+    .css('table.tableFile')
+    .at_xpath("//*[contains(text(),'submission text file')]")
+    .next_element
+    .children
+    .at('a')
+    .attribute('href')
+    .value
+end
+
+def verify_cik!(cik)
+  fail "Missing CIK" if cik.nil? || cik.empty?
+  fail "#{cik} is not a ten-digit number" unless /^[[:digit:]]{10}$/.match?(cik)
+end
+
+# Filing 
+# def get_filing(filing)
+#   HTTParty.get(filing.href).body
+# end
+
+verify_cik! ARGV[0]
